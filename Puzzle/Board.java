@@ -1,87 +1,192 @@
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 
-public class Board implements Comparable<Board> {
-    private int[][] blocks;
-    // construct a board from an N-by-N array of blocks
-    public Board(int[][] blocks) {
-        this.blocks = blocks;
+
+/**
+ * Represents a puzzle Board.
+ *
+ */
+public class Board {
+
+    private Board[] neighbors;
+    private int[][] tiles;
+
+
+    public Board(int[][] blocks) {          // construct a board from an N-by-N array of tiles
+        this.tiles = copy(blocks);          // (where tiles[i][j] = block in row i, column j)
     }
 
-    // board dimension N
-    public int dimension() {
-        return blocks.length;
+    private int[][] copy(int[][] arrayToCopy) {
+        int[][] copy = new int[arrayToCopy.length][];
+        for (int r = 0; r < arrayToCopy.length; r++) {
+            copy[r] = arrayToCopy[r].clone();
+        }
+        return copy;
     }
 
-    // number of blocks out of place
-    public int hamming() throws Exception {
-        throw new Exception("Not implemented yet");
+    private void exchangeBlocks(int[][] blocks, int iFirstBlock, int jFirstBlock, int iSecondsBlock, int jSecondBlock) {
+        int firstValue = blocks[iFirstBlock][jFirstBlock];
+        blocks[iFirstBlock][jFirstBlock] = blocks[iSecondsBlock][jSecondBlock];
+        blocks[iSecondsBlock][jSecondBlock] = firstValue;
     }
 
-    // sum of Manhattan distances between blocks and goal
-    public int manhattan() {
-        int manhattan = 0;
-        for (int i = 0; i < dimension(); i++) {
-            for (int j = 0; j < dimension(); j++) {
-                if (blocks[i][j] == 0) {
-                    continue;
-                }
-                int row = blocks[i][j] / dimension();
-                int col = dimension();
-                if (blocks[i][j] % dimension() > 0) {
-                    col = blocks[i][j] % dimension();
-                    row++;
-                }
-                manhattan += Math.abs(row - i + 1) + Math.abs(col - j + 1);
+    public int dimension() {                // board dimension N
+        return tiles.length;
+    }
+
+    public int hamming() {                  // number of tiles out of place
+        int value = -1;
+        for (int i = 0; i < tiles.length; i++) {
+            for (int j = 0; j < tiles[i].length; j++) {
+                if (tiles[i][j] != (i * tiles.length + j + 1)) value++;
             }
         }
-        return manhattan;
+        return value;
     }
 
-    // is this board the goal board?
-    public boolean isGoal() {
-        return manhattan() == 0;
-    }
-
-    // a board obtained by exchanging two adjacent blocks in the same row
-    public Board twin() throws Exception {
-        throw new Exception("Not implemented yet");
-    }
-
-    // does this board equal y?
-    public boolean equals(Object y) {
-        if (Object.class != this.getClass()) {
-            return false;
+    public int manhattan() {                // sum of Manhattan distances between tiles and goal
+        int value = 0;
+        for (int i = 0; i < tiles.length; i++) {
+            for (int j = 0; j < tiles[i].length; j++) {
+                int expectedValue = (i * tiles.length + j + 1);
+                if (tiles[i][j] != expectedValue && tiles[i][j] != 0) {
+                    int actualValue = tiles[i][j];
+                    actualValue--;
+                    int goalI = actualValue / dimension();
+                    int goalJ = actualValue % dimension();
+                    value += Math.abs(goalI - i) + Math.abs(goalJ - j);
+                }
+            }
         }
-        return toString().equals(y.toString());
+        return value;
     }
 
-    // all neighboring boards
-    public Iterable<Board> neighbors() throws Exception {
-        ArrayList<Board> neighbors = new ArrayList<Board>();
-        // TODO: make neighbors
-        throw new Exception("Not implemented yet");
-        //return neighbors;
+    public boolean isGoal() {               // is this board the goal board?
+        return hamming() == 0;
     }
 
-    // string representation of the board (in the output format specified below)
+    public Board twin() {                   // a board that is obtained by exchanging any pair of tiles
+        int[][] twinBlocks = copy(tiles);
+
+        int i = 0;
+        int j = 0;
+        while (twinBlocks[i][j] == 0 || twinBlocks[i][j + 1] == 0) {
+            j++;
+            if (j >= twinBlocks.length - 1) {
+                i++;
+                j = 0;
+            }
+        }
+
+        exchangeBlocks(twinBlocks, i, j, i, j + 1);
+        return new Board(twinBlocks);
+    }
+
+    @Override
+    public boolean equals(Object y) {       // does this board equal y?
+        if (this == y) return true;
+        if (y == null || getClass() != y.getClass()) return false;
+
+        Board that = (Board) y;
+        if (this.tiles.length != that.tiles.length) return false;
+        for (int i = 0; i < tiles.length; i++) {
+            if (this.tiles[i].length != that.tiles[i].length) return false;
+            for (int j = 0; j < tiles[i].length; j++) {
+                if (this.tiles[i][j] != that.tiles[i][j]) return false;
+            }
+        }
+
+        return true;
+    }
+
+    public Iterable<Board> neighbors() {    // all neighboring boards
+        return new Iterable<Board>() {
+            @Override
+            public Iterator<Board> iterator() {
+                if (neighbors == null) {
+                    findNeighbors();
+                }
+                return new NeighborIterator();
+            }
+        };
+    }
+
     public String toString() {
-        String out = Integer.toString(dimension());
-        for (int i = 0; i < dimension(); i++) {
-            for (int j = 0; j < dimension(); j++) {
-                out += " " + blocks[i][j];
+        StringBuilder boardStringBuilder = new StringBuilder(tiles.length + "\n");
+
+        for (int[] row : tiles) {
+            for (int block : row) {
+                boardStringBuilder.append(" ");
+                boardStringBuilder.append(block);
             }
-            out += "\n";
+            boardStringBuilder.append("\n");
         }
-        return out;
+
+        return boardStringBuilder.toString();
     }
 
-    public int compareTo(Board o) {
-        if (manhattan() == o.manhattan()) {
-            return 0;
+    private void findNeighbors() {
+        List<Board> foundNeighbors = new ArrayList<>();
+        int i = 0;
+        int j = 0;
+
+        while (tiles[i][j] != 0) {
+            j++;
+            if (j >= dimension()) {
+                i++;
+                j = 0;
+            }
         }
-        if (manhattan() > o.manhattan()) {
-            return 1;
+
+        if (i > 0) {
+            int[][] neighborTiles = copy(tiles);
+            exchangeBlocks(neighborTiles, i - 1, j, i, j);
+            foundNeighbors.add(new Board(neighborTiles));
         }
-        return -1;
+        if (i < dimension() - 1) {
+            int[][] neighborTiles = copy(tiles);
+            exchangeBlocks(neighborTiles, i, j, i + 1, j);
+            foundNeighbors.add(new Board(neighborTiles));
+        }
+        if (j > 0) {
+            int[][] neighborTiles = copy(tiles);
+            exchangeBlocks(neighborTiles, i, j - 1, i, j);
+            foundNeighbors.add(new Board(neighborTiles));
+        }
+        if (j < dimension() - 1) {
+            int[][] neighborTiles = copy(tiles);
+            exchangeBlocks(neighborTiles, i, j, i, j + 1);
+            foundNeighbors.add(new Board(neighborTiles));
+        }
+
+        neighbors = foundNeighbors.toArray(new Board[foundNeighbors.size()]);
     }
+
+
+    private class NeighborIterator implements Iterator<Board> {
+
+        private int index = 0;
+
+        @Override
+        public boolean hasNext() {
+            return index < neighbors.length;
+        }
+
+        @Override
+        public Board next() {
+            if (hasNext()) {
+                return neighbors[index++];
+            } else {
+                throw new NoSuchElementException("There is no next neighbor.");
+            }
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("Removal of neighbors not supported.");
+        }
+    }
+
 }
